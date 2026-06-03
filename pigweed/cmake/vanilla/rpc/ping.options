@@ -1,0 +1,2 @@
+rpc.ping.PingRequest.value max_size:64
+rpc.ping.PingResponse.value max_size:64
