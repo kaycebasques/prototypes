@@ -40,9 +40,9 @@ system path. Other than that it's a normal CMake build.
    python3 ../../../run_console.py --socket-addr localhost:33001
    ```
 
-   We are only using bootstrap here to simplify the prototype. In real-world
-   usage I imagine you'd have other ways to send RPCs to devices. I'm not sure
-   if it's a big lift to get `pw_console` working without a bootstrap.
+   We are only using bootstrap here to simplify the client-side
+   manual testing part of the prototype. I haven't investigated
+   how to set up client-side without bootstrap.
 
 3. In the Python REPL of `pw_console` send an RPC to the app.
 
@@ -59,12 +59,12 @@ system path. Other than that it's a normal CMake build.
 the `host` backend), which listens on a TCP socket. Communication over the
 socket uses HDLC framing (`pw_hdlc`).
 
-`pw_console` is the client. To allow `pw_console` to interact with the custom
-`ping.proto` service, the CMake build automatically generates the standard
-Python protobuf module (`ping_pb2.py`) to `build/generated_python`. The
-`run_console.py` script adds this directory to `sys.path` and passes the 
-odule to `pw_system.console` which dynamically builds the RPC client at
-runtime.
+`pw_console` is the client used for manual testing. To allow `pw_console` to
+interact with the custom `ping.proto` service, the CMake build automatically
+generates the standard Python protobuf module (`ping_pb2.py`) to
+`build/generated_python`. The `run_console.py` script adds this directory to
+`sys.path` and passes the module to `pw_system.console` which dynamically builds
+the RPC client at runtime.
 
 ### Files
 
