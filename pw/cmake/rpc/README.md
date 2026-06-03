@@ -15,24 +15,16 @@ fact so I may have missed something.
 
 Nanopb and Pigweed are managed through CMake's `FetchContent`.
 
+This prototype is now running on top of my WIP patch
+(https://pwrev.dev/417632) to add Python protobuf codegen to the
+CMake build. This change will reduce a lot of boilerplate complexity
+in the prototype's `CMakeLists.txt`.
+
 ## Build
 
 ```
 ./build.sh
 ```
-
-The build script adds Pigweed module paths to the Python system path (`PYTHONPATH`).
-Other than that, it's a normal CMake build.
-
-### Non-bootstrapped build details
-
-Because I'm trying to avoid bootstrap during the firmware build, it seems like
-I must manually generate Python protobuf modules for Pigweed's internal protos
-in `CMakeLists.txt`. Pigweed's CMake build system does not currently support
-Python code generation automatically, but Pigweed's own codegen plugins
-(which are run during the CMake build) require these modules to be present in
-`PYTHONPATH`. I'm working on a upstream Pigweed patch to add Python codegen
-capabilities in the CMake build.
 
 ## Run
 
@@ -69,12 +61,9 @@ capabilities in the CMake build.
 the `host` backend), which listens on a TCP socket. Communication over the
 socket uses HDLC framing (`pw_hdlc`).
 
-`pw_console` is the client used for manual testing. To allow `pw_console` to
-interact with the custom `ping.proto` service, the CMake build automatically
-generates the standard Python protobuf module (`ping_pb2.py`) to
-`build/generated_python`. The `run_console.py` script adds this directory to
-`sys.path` and passes the module to `pw_system.console` which dynamically builds
-the RPC client at runtime.
+All protobufs are generated during the CMake build.
+
+`pw_console` is the client used for manual testing.
 
 ### Files
 
@@ -101,8 +90,7 @@ Source files:
     protos.
 
 *   `//build.sh`: Bash script to run the build. It configures CMake (if not
-    already done) and builds the `rpc_demo` target. It also sets up
-    `PYTHONPATH` for the build process.
+    already done) and builds the `rpc_demo` target.
 
 *   `//install.sh`: Bash script to install system dependencies (on Debian-based
     systems).
