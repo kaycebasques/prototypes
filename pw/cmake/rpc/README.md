@@ -98,10 +98,10 @@ Source files:
 
 Generated files:
 
-*   `//build/generated/ping.pb.h` and `//build/generated/ping.pb.c`: Nanopb
+*   `//build/ping/nanopb/ping.pb.h` and `//build/ping/nanopb/ping.pb.c`: Nanopb
     generated C code for the `ping.proto` messages.
 
-*   `//build/generated/ping.rpc.pb.h`: Pigweed RPC generated C++ header for the
+*   `//build/ping/nanopb_rpc/ping.rpc.pb.h`: Pigweed RPC generated C++ header for the
     `ping.proto` service.
 
 *   `//build/generated_python/ping_pb2.py`: Python protobuf module generated

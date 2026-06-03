@@ -54,6 +54,75 @@ set(ENV{PW_ROOT} "${PIGWEED_DIR}")
 include(${PIGWEED_DIR}/pw_build/pigweed.cmake)
 include(${PIGWEED_DIR}/pw_protobuf_compiler/proto.cmake)
 
+# Find protoc
+find_program(PROTOC protoc REQUIRED)
+
+# Generate python proto modules needed by Pigweed plugins.
+# NOTE: These manual generation steps are required because Pigweed's own
+# Python-based protoc plugins (like plugin_nanopb.py) depend on these generated
+# Python modules (e.g. codegen_options_pb2.py, packet_pb2.py). In a non-bootstrapped
+# CMake build, Pigweed's CMake system does not automatically generate these
+# Python modules before they are needed by the plugins, which would cause the
+# build to fail with ModuleNotFoundError.
+set(PYTHON_PACKAGES_DIR "${CMAKE_CURRENT_BINARY_DIR}/python_packages")
+file(MAKE_DIRECTORY ${PYTHON_PACKAGES_DIR}/pw_protobuf_codegen_protos)
+file(MAKE_DIRECTORY ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos)
+
+add_custom_command(
+  OUTPUT ${PYTHON_PACKAGES_DIR}/pw_protobuf_codegen_protos/codegen_options_pb2.py
+  COMMAND ${PROTOC}
+          --python_out=${PYTHON_PACKAGES_DIR}
+          -I${PIGWEED_DIR}/pw_protobuf
+          ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_codegen_protos/codegen_options.proto
+  DEPENDS ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_codegen_protos/codegen_options.proto
+)
+
+add_custom_command(
+  OUTPUT
+    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/common_pb2.py
+    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/status_pb2.py
+    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/field_options_pb2.py
+  COMMAND ${PROTOC}
+          --python_out=${PYTHON_PACKAGES_DIR}
+          -I${PIGWEED_DIR}/pw_protobuf
+          ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/common.proto
+          ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/status.proto
+          ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/field_options.proto
+  DEPENDS
+    ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/common.proto
+    ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/status.proto
+    ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/field_options.proto
+)
+
+add_custom_command(
+  OUTPUT ${PYTHON_PACKAGES_DIR}/pw_rpc/internal/packet_pb2.py
+  COMMAND ${PROTOC}
+          --python_out=${PYTHON_PACKAGES_DIR}
+          -I${PIGWEED_DIR}
+          ${PIGWEED_DIR}/pw_rpc/internal/packet.proto
+  DEPENDS ${PIGWEED_DIR}/pw_rpc/internal/packet.proto
+)
+
+add_custom_target(generate_python_protos
+  DEPENDS
+    ${PYTHON_PACKAGES_DIR}/pw_protobuf_codegen_protos/codegen_options_pb2.py
+    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/common_pb2.py
+    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/status_pb2.py
+    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/field_options_pb2.py
+    ${PYTHON_PACKAGES_DIR}/pw_rpc/internal/packet_pb2.py
+)
+
+# Add dependency to Pigweed internal proto targets
+if(TARGET pw_rpc.protos._generate.pwpb)
+  add_dependencies(pw_rpc.protos._generate.pwpb generate_python_protos)
+endif()
+if(TARGET pw_rpc.protos._generate.nanopb)
+  add_dependencies(pw_rpc.protos._generate.nanopb generate_python_protos)
+endif()
+if(TARGET pw_rpc.protos._generate.nanopb_rpc)
+  add_dependencies(pw_rpc.protos._generate.nanopb_rpc generate_python_protos)
+endif()
+
 # 6. Declare the proto library.
 pw_proto_library(ping
   SOURCES
@@ -61,9 +130,6 @@ pw_proto_library(ping
   INPUTS
     ping.options
 )
-
-# Find protoc for python proto generation
-find_program(PROTOC protoc REQUIRED)
 
 # 7. Generate python proto for console.
 # NOTE: Pigweed's pw_proto_library in CMake does not support Python code
