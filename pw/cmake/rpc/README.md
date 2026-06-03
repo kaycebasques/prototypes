@@ -21,8 +21,18 @@ Nanopb and Pigweed are managed through CMake's `FetchContent`.
 ./build.sh
 ```
 
-The build script adds a bunch of Pigweed module paths to the Python
-system path. Other than that it's a normal CMake build.
+The build script adds Pigweed module paths to the Python system path (`PYTHONPATH`).
+Other than that, it's a normal CMake build.
+
+### Non-bootstrapped build details
+
+Because I'm trying to avoid bootstrap during the firmware build, it seems like
+I must manually generate Python protobuf modules for Pigweed's internal protos
+in `CMakeLists.txt`. Pigweed's CMake build system does not currently support
+Python code generation automatically, but Pigweed's own codegen plugins
+(which are run during the CMake build) require these modules to be present in
+`PYTHONPATH`. I'm working on a upstream Pigweed patch to add Python codegen
+capabilities in the CMake build.
 
 ## Run
 
@@ -70,9 +80,10 @@ the RPC client at runtime.
 
 Source files:
 
-*   `//CMakeLists.txt`: Defines the CMake build system, including fetching
-    dependencies (Nanopb, Pigweed), generating protobuf code, and defining the
-    executable target `rpc_demo`.
+*   `//CMakeLists.txt`: Defines the CMake build system. It fetches dependencies
+    (Nanopb, Pigweed), configures Pigweed backends, manually bootstraps
+    Pigweed-internal Python protos needed by plugins, uses `pw_proto_library`
+    for C++ proto generation, and defines the `rpc_demo` executable target.
 
 *   `//main.cc`: The entry point for the C++ application. It initializes the
     Pigweed system server, registers the `PingService`, and starts the server.
