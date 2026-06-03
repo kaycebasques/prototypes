@@ -5,11 +5,15 @@ and uses Nanopb for protobuf codegen. The app and protobuf codegen builds
 without a Pigweed bootstrap. I use a bootstrap to spin up `pw_console` and
 verify that I can send an RPC to the app.
 
-## Dependencies
+## Toolchain
 
 On Debian-based systems, running `./install.sh` should get you
 most or everything you need. This list was generated after the
 fact so I may have missed something.
+
+## Dependencies
+
+Nanopb and Pigweed are managed through CMake's `FetchContent`.
 
 ## Build
 
@@ -51,23 +55,18 @@ system path. Other than that it's a normal CMake build.
 
 ## Architecture
 
-### Communication
+`main.cc` is an RPC server. It uses `pw_rpc::system_server` (configured with
+the `host` backend), which listens on a TCP socket. Communication over the
+socket uses HDLC framing (`pw_hdlc`).
 
-This demo implements only the server side of the RPC communication.
+`pw_console` is the client. To allow `pw_console` to interact with the custom
+`ping.proto` service, the CMake build automatically generates the standard
+Python protobuf module (`ping_pb2.py`) to `build/generated_python`. The
+`run_console.py` script adds this directory to `sys.path` and passes the 
+odule to `pw_system.console` which dynamically builds the RPC client at
+runtime.
 
-The server uses `pw_rpc::system_server` (configured with the `host` backend),
-which listens on a TCP socket (port 33000). Communication over the socket
-uses HDLC framing (`pw_hdlc`).
-
-### Proto generation
-
-To allow `pw_console` to interact with our custom `ping.proto` service, the
-CMake build automatically generates the standard Python protobuf module
-(`ping_pb2.py`) to `build/generated_python`. The `run_console.py` script adds
-this directory to `sys.path` and passes the module to `pw_system.console` which
-dynamically builds the RPC client at runtime.
-
-## Files
+### Files
 
 Source files:
 
@@ -110,13 +109,3 @@ Generated files:
 
 *   `//build/python_packages/`: Contains Python protobuf modules generated from
     Pigweed internal protos, required by Pigweed RPC plugins.
-
-    *   `//build/python_packages/pw_protobuf_codegen_protos/codegen_options_pb2.py`
-
-    *   `//build/python_packages/pw_protobuf_protos/common_pb2.py`
-
-    *   `//build/python_packages/pw_protobuf_protos/field_options_pb2.py`
-
-    *   `//build/python_packages/pw_protobuf_protos/status_pb2.py`
-
-    *   `//build/python_packages/pw_rpc/internal/packet_pb2.py`
