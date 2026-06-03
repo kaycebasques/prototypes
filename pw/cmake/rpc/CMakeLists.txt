@@ -52,119 +52,27 @@ set(ENV{PW_ROOT} "${PIGWEED_DIR}")
 
 # Include Pigweed CMake helper
 include(${PIGWEED_DIR}/pw_build/pigweed.cmake)
+include(${PIGWEED_DIR}/pw_protobuf_compiler/proto.cmake)
 
-# 6. Find protoc
+# 6. Declare the proto library.
+pw_proto_library(ping
+  SOURCES
+    ping.proto
+  INPUTS
+    ping.options
+)
+
+# Find protoc for python proto generation
 find_program(PROTOC protoc REQUIRED)
 
-# 7. Generate python proto modules needed by Pigweed plugins
-set(PYTHON_PACKAGES_DIR "${CMAKE_CURRENT_BINARY_DIR}/python_packages")
-file(MAKE_DIRECTORY ${PYTHON_PACKAGES_DIR}/pw_protobuf_codegen_protos)
-file(MAKE_DIRECTORY ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos)
-
-add_custom_command(
-  OUTPUT ${PYTHON_PACKAGES_DIR}/pw_protobuf_codegen_protos/codegen_options_pb2.py
-  COMMAND ${PROTOC}
-          --python_out=${PYTHON_PACKAGES_DIR}
-          -I${PIGWEED_DIR}/pw_protobuf
-          ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_codegen_protos/codegen_options.proto
-  DEPENDS ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_codegen_protos/codegen_options.proto
-)
-
-add_custom_command(
-  OUTPUT
-    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/common_pb2.py
-    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/status_pb2.py
-    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/field_options_pb2.py
-  COMMAND ${PROTOC}
-          --python_out=${PYTHON_PACKAGES_DIR}
-          -I${PIGWEED_DIR}/pw_protobuf
-          ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/common.proto
-          ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/status.proto
-          ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/field_options.proto
-  DEPENDS
-    ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/common.proto
-    ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/status.proto
-    ${PIGWEED_DIR}/pw_protobuf/pw_protobuf_protos/field_options.proto
-)
-
-add_custom_command(
-  OUTPUT ${PYTHON_PACKAGES_DIR}/pw_rpc/internal/packet_pb2.py
-  COMMAND ${PROTOC}
-          --python_out=${PYTHON_PACKAGES_DIR}
-          -I${PIGWEED_DIR}
-          ${PIGWEED_DIR}/pw_rpc/internal/packet.proto
-  DEPENDS ${PIGWEED_DIR}/pw_rpc/internal/packet.proto
-)
-
-add_custom_target(generate_python_protos
-  DEPENDS
-    ${PYTHON_PACKAGES_DIR}/pw_protobuf_codegen_protos/codegen_options_pb2.py
-    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/common_pb2.py
-    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/status_pb2.py
-    ${PYTHON_PACKAGES_DIR}/pw_protobuf_protos/field_options_pb2.py
-    ${PYTHON_PACKAGES_DIR}/pw_rpc/internal/packet_pb2.py
-)
-
-# Add dependency to Pigweed internal proto targets
-if(TARGET pw_rpc.protos._generate.pwpb)
-  add_dependencies(pw_rpc.protos._generate.pwpb generate_python_protos)
-endif()
-if(TARGET pw_rpc.protos._generate.nanopb)
-  add_dependencies(pw_rpc.protos._generate.nanopb generate_python_protos)
-endif()
-if(TARGET pw_rpc.protos._generate.nanopb_rpc)
-  add_dependencies(pw_rpc.protos._generate.nanopb_rpc generate_python_protos)
-endif()
-
-# 8. Manual Proto Generation Setup for User Proto
-set(GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
-file(MAKE_DIRECTORY ${GENERATED_DIR})
-
+# 7. Generate python proto for console.
+# NOTE: Pigweed's pw_proto_library in CMake does not support Python code
+# generation (unlike the GN version). We need to manually generate python
+# protos here because run_console.py requires ping_pb2.py to run the host-side
+# interactive console.
 set(GENERATED_PYTHON_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated_python")
 file(MAKE_DIRECTORY ${GENERATED_PYTHON_DIR})
 
-# Construct PYTHONPATH for Pigweed RPC plugin
-set(PW_PYTHON_PATH
-  ${PYTHON_PACKAGES_DIR}
-  ${PIGWEED_DIR}/pw_rpc/py
-  ${PIGWEED_DIR}/pw_status/py
-  ${PIGWEED_DIR}/pw_protobuf/py
-  ${PIGWEED_DIR}/pw_protobuf_compiler/py
-  ${PIGWEED_DIR}/pw_stream/py
-  ${PIGWEED_DIR}/pw_log/py
-)
-string(REPLACE ";" ":" PW_PYTHON_PATH_STR "${PW_PYTHON_PATH}")
-
-# Command to generate nanopb .pb.h/.pb.c
-add_custom_command(
-  OUTPUT
-    ${GENERATED_DIR}/ping.pb.h
-    ${GENERATED_DIR}/ping.pb.c
-  COMMAND ${CMAKE_COMMAND} -E env "PYTHONPATH=${nanopb_SOURCE_DIR}/generator"
-          ${PROTOC}
-          --plugin=protoc-gen-nanopb=${nanopb_SOURCE_DIR}/generator/protoc-gen-nanopb
-          --nanopb_out=${GENERATED_DIR}
-          -I.
-          ping.proto
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  DEPENDS ping.proto ping.options
-)
-
-# Command to generate pw_rpc .rpc.pb.h
-add_custom_command(
-  OUTPUT
-    ${GENERATED_DIR}/ping.rpc.pb.h
-  COMMAND ${CMAKE_COMMAND} -E env "PYTHONPATH=${PW_PYTHON_PATH_STR}"
-          ${PROTOC}
-          --plugin=protoc-gen-custom=${PIGWEED_DIR}/pw_rpc/py/pw_rpc/plugin_nanopb.py
-          --custom_out=${GENERATED_DIR}
-          -I.
-          ping.proto
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  DEPENDS ping.proto ${GENERATED_DIR}/ping.pb.h
-)
-
-# Command to generate python proto
 add_custom_command(
   OUTPUT
     ${GENERATED_PYTHON_DIR}/ping_pb2.py
@@ -181,27 +89,14 @@ add_custom_target(generate_python_ping_protos
     ${GENERATED_PYTHON_DIR}/ping_pb2.py
 )
 
-# Create library for generated protos
-add_library(ping_protos STATIC
-  ${GENERATED_DIR}/ping.pb.c
-  ${GENERATED_DIR}/ping.pb.h
-  ${GENERATED_DIR}/ping.rpc.pb.h
-)
-target_include_directories(ping_protos PUBLIC ${GENERATED_DIR})
-target_link_libraries(ping_protos
-  PUBLIC
-    protobuf-nanopb-static
-    pw_rpc.nanopb.server_api
-    pw_rpc.server
-)
-
-# 9. Define Demo Executable
+# 8. Define Demo Executable
 add_executable(rpc_demo main.cc)
 target_link_libraries(rpc_demo
   PRIVATE
-    ping_protos
+    ping.nanopb_rpc
     pw_rpc.system_server
     pw_log
 )
-add_dependencies(rpc_demo generate_python_protos generate_python_ping_protos)
+add_dependencies(rpc_demo generate_python_ping_protos)
+
 
