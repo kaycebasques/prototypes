@@ -15,7 +15,7 @@ set(dir_pw_third_party_nanopb "${nanopb_SOURCE_DIR}" CACHE PATH "" FORCE)
 FetchContent_Declare(
   pigweed
   GIT_REPOSITORY https://github.com/kaycebasques/pigweed.git
-  GIT_TAG f5699065b9b47bd65ae0d973fa2e2a1c366933c5
+  GIT_TAG d729c05d905872b3ed1a763219fbcc95b4fc26ee
 )
 
 # 3. Configure Pigweed backends.
