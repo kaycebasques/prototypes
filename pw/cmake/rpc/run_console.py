@@ -4,7 +4,7 @@ from pathlib import Path
 
 # Calculate paths relative to this script
 SCRIPT_DIR = Path(__file__).resolve().parent
-GENERATED_PYTHON_DIR = SCRIPT_DIR / 'build' / 'generated_python'
+GENERATED_PYTHON_DIR = SCRIPT_DIR / 'build' / 'generated_python' / 'python'
 
 # Ensure the generated python protos are importable
 if GENERATED_PYTHON_DIR.exists():
