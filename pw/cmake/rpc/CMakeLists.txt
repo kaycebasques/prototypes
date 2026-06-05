@@ -66,32 +66,7 @@ add_custom_target(generate_python_protos
     pw_rpc.protos.python
 )
 
-# Ensure Pigweed internal proto generation has access to generated python protos
-# needed by its plugins.
-if(TARGET pw_rpc.protos._generate.pwpb)
-  add_dependencies(pw_rpc.protos._generate.pwpb
-    pw_protobuf.codegen_protos.python
-    pw_protobuf.common_proto.python
-    pw_protobuf.status_proto.python
-    pw_protobuf.field_options_proto.python
-  )
-endif()
-if(TARGET pw_rpc.protos._generate.nanopb)
-  add_dependencies(pw_rpc.protos._generate.nanopb
-    pw_protobuf.codegen_protos.python
-    pw_protobuf.common_proto.python
-    pw_protobuf.status_proto.python
-    pw_protobuf.field_options_proto.python
-  )
-endif()
-if(TARGET pw_rpc.protos._generate.nanopb_rpc)
-  add_dependencies(pw_rpc.protos._generate.nanopb_rpc
-    pw_protobuf.codegen_protos.python
-    pw_protobuf.common_proto.python
-    pw_protobuf.status_proto.python
-    pw_protobuf.field_options_proto.python
-  )
-endif()
+
 
 # 6. Declare the proto library.
 pw_proto_library(ping
