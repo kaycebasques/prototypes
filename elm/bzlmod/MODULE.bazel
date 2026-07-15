@@ -1,0 +1,79 @@
+module(
+    name = "hello_elm",
+    version = "0.0.1",
+)
+
+bazel_dep(name = "rules_elm", version = "1.1.1")
+bazel_dep(name = "aspect_rules_js", version = "2.9.2")
+
+elm = use_extension("@rules_elm//elm:extensions.bzl", "elm")
+
+# Workflow for adding a new Elm dependency:
+#
+# 1. Identify the package name and version from your elm.json (e.g. "elm/http": "2.0.0").
+# 2. Find the source URL. Elm packages are hosted on GitHub:
+#    Format: https://github.com/<owner>/<repo>/archive/<version>.tar.gz
+#    Example: https://github.com/elm/http/archive/2.0.0.tar.gz
+# 3. Determine the SHA-256 hash of the archive:
+#    Run: curl -L https://github.com/<owner>/<repo>/archive/<version>.tar.gz | sha256sum
+# 4. Determine the strip_prefix (the top-level directory in the extracted archive):
+#    Format: <repo>-<version> (Note: <repo> is just the repository name, not the owner)
+#    Example: "http-2.0.0"
+# 5. Define the repository using `elm.repository`:
+#    - `name` MUST follow the convention: "elm_package_" + owner + "_" + repo (with slashes and hyphens replaced by underscores).
+#      Example: "elm_package_elm_http"
+# 6. Add the new repository name to the `use_repo` list at the bottom of this file.
+
+elm.repository(
+    name = "elm_package_elm_core",
+    sha256 = "6e37b11c88c89a68d19d0c7625f1ef39ed70c59e443def95e4de98d6748c80a7",
+    strip_prefix = "core-1.0.5",
+    urls = ["https://github.com/elm/core/archive/1.0.5.tar.gz"],
+)
+elm.repository(
+    name = "elm_package_elm_html",
+    sha256 = "73b885e0a3d2f9781b1c9bbcc1ee9ac032f503f5ef46a27da3ba617cebbf6fd8",
+    strip_prefix = "html-1.0.0",
+    urls = ["https://github.com/elm/html/archive/1.0.0.tar.gz"],
+)
+elm.repository(
+    name = "elm_package_elm_json",
+    sha256 = "d0635f33137e4ad3fc323f96ba280e45dc41afa51076c53d9f04fd92c2cf5c4e",
+    strip_prefix = "json-1.1.3",
+    urls = ["https://github.com/elm/json/archive/1.1.3.tar.gz"],
+)
+elm.repository(
+    name = "elm_package_elm_virtual_dom",
+    sha256 = "cf87286ed5d1b31aaf99c6a3368ccd340d1356b1973f1afe5f668c47e22b3b60",
+    strip_prefix = "virtual-dom-1.0.2",
+    urls = ["https://github.com/elm/virtual-dom/archive/1.0.2.tar.gz"],
+)
+elm.repository(
+    name = "elm_package_elm_browser",
+    sha256 = "23f41491d325afc72649d512741fb8173725014c93e482d25bab3325555a4f59",
+    strip_prefix = "browser-1.0.2",
+    urls = ["https://github.com/elm/browser/archive/1.0.2.tar.gz"],
+)
+elm.repository(
+    name = "elm_package_elm_time",
+    sha256 = "e18bca487adec67bfe4043a33b975d81527a7732377050d0421dd86d503c906d",
+    strip_prefix = "time-1.0.0",
+    urls = ["https://github.com/elm/time/archive/1.0.0.tar.gz"],
+)
+elm.repository(
+    name = "elm_package_elm_url",
+    sha256 = "840e9d45d8a9bd64a7f76421a1de2518e02c7cbea7ed42efd380b4e875e9682b",
+    strip_prefix = "url-1.0.0",
+    urls = ["https://github.com/elm/url/archive/1.0.0.tar.gz"],
+)
+
+use_repo(
+    elm,
+    "elm_package_elm_core",
+    "elm_package_elm_html",
+    "elm_package_elm_json",
+    "elm_package_elm_virtual_dom",
+    "elm_package_elm_browser",
+    "elm_package_elm_time",
+    "elm_package_elm_url",
+)

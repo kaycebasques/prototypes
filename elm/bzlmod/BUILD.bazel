@@ -1,0 +1,26 @@
+load("@aspect_rules_js//js:defs.bzl", "js_binary")
+load("@rules_elm//elm:defs.bzl", "elm_binary")
+
+elm_binary(
+    name = "main_js",
+    main = "src/Main.elm",
+    deps = [
+        "@elm_package_elm_core",
+        "@elm_package_elm_html",
+        "@elm_package_elm_browser",
+        "@elm_package_elm_virtual_dom",
+        "@elm_package_elm_json",
+        "@elm_package_elm_time",
+        "@elm_package_elm_url",
+    ],
+    visibility = ["//visibility:private"],
+)
+
+js_binary(
+    name = "app",
+    entry_point = "server.js",
+    data = [
+        "index.html",
+        ":main_js",
+    ],
+)
