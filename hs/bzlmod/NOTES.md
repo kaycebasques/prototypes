@@ -48,11 +48,23 @@ The build is made 100% hermetic by applying a Bzlmod patch override to
    )
    ```
 
-## Verification
-You can clone this repository on any modern Linux machine and build/run
-targets out of the box with zero host package prerequisites:
+## Verification & Hermeticity Proof
+You can verify the hermeticity of the build on any modern Linux machine by running `hermetic.py`:
 
 ```bash
 cd hs/bzlmod
-bazelisk run //:example
+python3 hermetic.py
 ```
+
+The script proves hermeticity through a two-phase verification process:
+
+1. **Action Graph Inspection (`bazelisk aquery`)**
+   - Queries the build graph (`bazelisk aquery --output=jsonproto "deps(//:example)"`) to inspect all actions, toolchains, executables, environment variables, and input artifacts.
+   - **Haskell Toolchains & Compilers**: Confirms that GHC, `ghc-pkg`, and related toolchain paths (`RULES_HASKELL_GHC_PATH`, `RULES_HASKELL_GHC_PKG_PATH`, `RULES_HASKELL_LIBDIR_PATH`, etc.) resolve exclusively to Bazel-managed external repositories (`external/rules_haskell...`) and not to host Haskell paths (`/usr/bin/ghc`, `~/.ghcup`, `~/.cabal`, `~/.stack`, `/nix/store`, or `/opt/ghc`).
+   - **Executables & Command Arguments**: Verifies that actions invoke Bazel-managed wrappers (`ghc_wrapper`, `cabal_wrapper`) or bindist binaries, and that action arguments contain no host tool or library search flags.
+   - **Input Artifacts & Library Dependencies**: Resolves all input artifacts across Haskell and linking actions to verify that all Haskell packages (`base`, `bytestring`, `zlib`, `rts`), interface files (`.hi`), package configs (`.conf.d`), and C dependencies (`zlib.dev` / `libz.a`) are Bazel-managed artifacts, with zero inputs originating from host system library paths (`/usr/lib`, `/usr/local/lib`, `/lib64`, `~/.ghc`, etc.).
+
+2. **Sanitized Minimal-Environment Build & Execution (`bazelisk run`)**
+   - Strips all host Haskell and toolchain environment variables (`GHC*`, `CABAL*`, `STACK*`, `NIX*`, `HASKELL*`) to create a minimal environment (`PATH`, `HOME`, `USER`).
+   - Executes `bazelisk run //:example` to prove that the target compiles, links, and executes successfully without any host Haskell prerequisites, outputting `Hello from rules_haskell!`.
+
