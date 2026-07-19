@@ -1,0 +1,31 @@
+build:ci --loading_phase_threads=1
+build:ci --jobs=2
+build:ci --verbose_failures
+common:ci --color=no
+test:ci --test_output=errors
+
+common --enable_bzlmod=true
+
+# Should become the default in bazel 7
+build --incompatible_enable_cc_toolchain_resolution
+
+# Enable automatic OS-specific config (e.g. build:linux, build:macos, build:windows).
+common --enable_platform_specific_config
+
+# MacOS Configuration
+# -------------------
+# do not use Xcode on macOS
+common:macos --repo_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
+
+# Windows Configuration
+# ---------------------
+# prevent auto-detection of system compilers on Windows
+common:windows --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+
+# test environment does not propagate locales by default
+# some tests reads files written in UTF8, we need to propagate the correct
+# environment variables, such as LOCALE_ARCHIVE
+# We also need to setup an utf8 locale
+test --test_env=LANG=en_US.utf8 --test_env=LOCALE_ARCHIVE
+
+try-import .bazelrc.local

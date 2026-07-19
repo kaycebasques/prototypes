@@ -1,0 +1,7 @@
+--- a/haskell/private/ghc_bindist_generated.json
++++ b/haskell/private/ghc_bindist_generated.json
+@@ -230,2 +230,2 @@
+-            "https://downloads.haskell.org/~ghc/9.4.6/ghc-9.4.6-x86_64-deb9-linux.tar.xz",
+-            "345267ac5c142c7914debffc5c1f9cafd2bec100eb1fb70aa8b114c28d33dc0f"
++            "https://downloads.haskell.org/~ghc/9.4.6/ghc-9.4.6-x86_64-deb11-linux.tar.xz",
++            "43da1a641307fcd97b324648adcd39b673b94ab61507b5639038b36abf938569"
