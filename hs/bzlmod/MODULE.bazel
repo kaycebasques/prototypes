@@ -30,6 +30,7 @@ non_module_deps = use_extension(
 
 use_repo(
     non_module_deps,
+    "gmp",
     "zlib.dev",
 )
 
@@ -47,7 +48,10 @@ use_repo(
 
 stack.package(
     name = "zlib",
-    extra_deps = ["@zlib.dev//:zlib"],
+    extra_deps = [
+        "@gmp//:gmp",
+        "@zlib.dev//:zlib",
+    ],
 )
 
 # LTS snapshot published for ghc-9.4.6 (default version used by rules_haskell)
