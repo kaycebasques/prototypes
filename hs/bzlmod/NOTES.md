@@ -1,85 +1,106 @@
-# Haskell Bazel Build Setup (Bzlmod)
+# Hermetic Haskell Bazel Build Architecture & Reference
 
 ## Overview
-The Bazel build in `hs/bzlmod` is configured using `bzlmod` with `rules_haskell` 1.0. It provides a fully hermetic Haskell build without requiring Nix, legacy `WORKSPACE` files, or host-installed Haskell toolchains (`ghc`, `cabal`, `stack`, `ghcup`) or system C libraries (`libgmp-dev`, `libtinfo-dev`).
+This repository (`hs/bzlmod`) provides a **100% hermetic Haskell build** in Bazel using `bzlmod`. The build operates cleanly without requiring Nix, legacy `WORKSPACE` files, host-installed Haskell toolchains (`ghc`, `cabal`, `stack`, `ghcup`), or host system C development libraries (`libgmp-dev`, `libtinfo-dev`, `zlib1g-dev`).
 
-Bazel version is pinned to `6.5.0` via `.bazelversion` because `rules_haskell` 1.0 relies on Bazel 6.x Starlark C++ toolchain APIs (newer Bazel versions like 9.x removed legacy Starlark symbols such as `CcInfo`).
+---
 
-## Issues Encountered on Clean Linux Systems
-
-When running `rules_haskell` out-of-the-box on clean Linux machines, two host library dependency issues arise:
-
-### 1. `libtinfo.so.5` (GHC Binary Wrapper Failures)
-By default, `rules_haskell` downloads precompiled GHC binary distributions (bindists) built for older Debian 9 Linux (`ghc-9.4.6-x86_64-deb9-linux.tar.xz`). During toolchain extraction and installation (`make install`), the GHC package registration tool (`ghc-pkg`) fails on modern Linux systems because it is dynamically linked against `ncurses 5` (`libtinfo.so.5`):
+## 1. Current Architecture
 
 ```
-ghc-pkg: error while loading shared libraries: libtinfo.so.5:
-cannot open shared object file: No such file or directory
+                                  +-------------------+
+                                  |   MODULE.bazel    |
+                                  +---------+---------+
+                                            |
+                  +-------------------------+-------------------------+
+                  |                                                   |
+      [archive_override]                                    [use_extension]
+  tweag/rules_haskell (master)                                 //:non_module_deps.bzl
+                  |                                                   |
+        (native deb11 selection)                          +-----------+-----------+
+  haskell_toolchains.bindists(dist="deb11")               |                       |
+                  |                                   @zlib.dev//:zlib        @gmp//:gmp
+                  v                                       |                       |
+       GHC 9.4.6 (Debian 11)                              +-----------+-----------+
+    Bundled libtinfo6 & libgmp                                        |
+                  |                                                   v
+                  +---------------------------------------> stack.package(name="zlib",
+                                                              extra_deps=["@zlib.dev", "@gmp"])
+                                                                      |
+                                                                      v
+                                                            //:example (Haskell Binary)
 ```
 
-Modern Linux distributions (Debian 12, Ubuntu 22.04+, RHEL/Fedora, Arch) ship with `ncurses 6` (`libtinfo.so.6`).
+### Key Architectural Components:
 
-### 2. `cannot find -lgmp` (Cabal & Linker Failures on Clean Machines)
-When building Hackage packages (`@stackage//:zlib`) or linking Haskell binaries (`//:example`), GHC's core `ghc-bignum` package passes `-lgmp` to the C linker (`ld`). On machines without host development packages installed (`sudo apt install libgmp-dev`), the build fails with:
+1. **Pure Bzlmod Setup (`MODULE.bazel`)**:
+   - The project uses `MODULE.bazel` exclusively. The `WORKSPACE` file is empty (`# Empty WORKSPACE file for bzlmod project`).
+   - Bazel version is pinned to `6.5.0` via `.bazelversion` due to `rules_haskell`'s reliance on Bazel 6.x Starlark C++ toolchain APIs.
 
-```
-/usr/bin/x86_64-linux-gnu-ld.bfd: cannot find -lgmp: No such file or directory
-collect2: error: ld returned 1 exit status
-`gcc' failed in phase `Linker'. (Exit code: 1)
-```
+2. **Upstream Bzlmod Override (`archive_override`)**:
+   - Uses `archive_override` to pin `rules_haskell` to upstream master (`https://github.com/tweag/rules_haskell/archive/refs/heads/master.tar.gz`).
+   - This provides native support for selecting Linux distributions via the `dist` attribute in `haskell_toolchains.bindists`.
 
-## Hermetic Solution (100% Bzlmod, Patch-Free)
+3. **Debian 11 GHC Bindist (`deb11`)**:
+   - GHC `9.4.6` is downloaded using the official Debian 11 binary distribution (`deb11`).
+   - Debian 11 GHC binaries dynamically link against `ncurses 6` (`libtinfo.so.6`), avoiding runtime library missing errors on modern Linux distros (Debian 12, Ubuntu 22.04+, RHEL/Fedora, Arch).
 
-The build is configured entirely in `MODULE.bazel` without any legacy `WORKSPACE` files, custom toolchain macros, or source patches:
+4. **Hermetic C Dependencies (`non_module_deps.bzl`)**:
+   - **`@zlib.dev//:zlib`**: Downloads `zlib-1.3` source and builds static `libz.a` hermetically via `zlib.BUILD.bazel`.
+   - **`@gmp//:gmp`**: Downloads Debian's `libgmp-dev` and `libgmp10` deb packages and extracts `libgmp.a`/`libgmp.so` and `gmp.h` into `@gmp//:gmp`.
+   - Both dependencies are passed as `extra_deps` to `stack.package` for Hackage packages (`@stackage//:zlib`).
 
-1. **Bzlmod Module Override (`archive_override`)**:
-   `MODULE.bazel` pins `rules_haskell` directly to upstream master on GitHub, which contains native multi-distribution bindist support:
+---
 
-   ```starlark
-   archive_override(
-       module_name = "rules_haskell",
-       urls = ["https://github.com/tweag/rules_haskell/archive/refs/heads/master.tar.gz"],
-       strip_prefix = "rules_haskell-master",
-   )
-   ```
+## 2. Workarounds Currently In Use
 
-2. **Native Debian 11 GHC Bindist (`deb11`)**:
-   With upstream's native `dist` attribute, `MODULE.bazel` directly selects the Debian 11 binary distribution for GHC 9.4.6:
+1. **`archive_override` for BCR 1.0 Feature Gap**:
+   - *Issue*: The official `1.0` release tag published on Bazel Central Registry (BCR) hardcodes GHC downloads to Debian 9 (`deb9`) and lacks the `dist` attribute in `haskell_toolchains.bindists`.
+   - *Workaround*: We use `archive_override` in `MODULE.bazel` to fetch upstream `master`, giving us native `dist = {"linux_amd64": "deb11"}` without applying local source patches.
 
-   ```starlark
-   haskell_toolchains = use_extension(
-       "@rules_haskell//extensions:haskell_toolchains.bzl",
-       "haskell_toolchains",
-   )
+2. **Hermetic `@gmp//:gmp` Repository for `ghc-bignum`**:
+   - *Issue*: GHC's core package `ghc-bignum` requests `-lgmp` during linker phases (`hsc2hs` / `CabalLibrary`). On minimal Linux machines without `libgmp-dev` on the host OS, `/usr/bin/ld: cannot find -lgmp` fails the build.
+   - *Workaround*: `non_module_deps.bzl` fetches and unpacks Debian's GMP packages into a hermetic `@gmp//:gmp` repository, which is supplied to `stack.package(extra_deps = ["@gmp//:gmp", ...])`.
 
-   haskell_toolchains.bindists(
-       version = "9.4.6",
-       dist = {
-           "linux_amd64": "deb11",
-       },
-   )
-   ```
+---
 
-3. **Zero Patch Overrides & Zero Host Tool Dependencies**:
-   The Debian 11 bindist dynamically links against `ncurses 6` (`libtinfo.so.6`), which is standard on modern Linux systems. Zero patch files (`single_version_override`) or host Haskell toolchains are needed.
+## 3. Alternative Approaches Attempted & Why They Were Rejected
 
-## Verification & Hermeticity Proof
+1. **Patching `rules_haskell` Source Files (`single_version_override`)**:
+   - *Attempted*: Created a patch file (`rules_haskell_bindist.patch`) and applied it via `single_version_override(module_name = "rules_haskell", patches = [...])`.
+   - *Why Rejected*: High maintenance burden. Patch files break whenever `rules_haskell` updates upstream, and the user explicitly requested avoiding source patches.
 
-You can verify the hermeticity of the build on any Linux machine by running `hermetic.py`:
+2. **Local Directory Overrides (`local_path_override`)**:
+   - *Attempted*: Used `local_path_override` pointing to a local git clone (`tmp/rules_haskell`).
+   - *Why Rejected*: Non-reproducible across different developer machines and CI pipelines. Requires manual pre-cloning steps outside Bazel.
+
+3. **Custom Workspace Toolchain Extension (`ghc_toolchains.bzl`)**:
+   - *Attempted*: Wrote a custom repository rule to download GHC Debian 11, run `./configure --prefix && make install`, patch binary wrapper paths, and invoke `pkgdb_to_bzl.py`.
+   - *Why Rejected*: High complexity (~150 lines of Starlark logic). Required manual handling for GHC's internal `package.conf.d` and `docdir` paths. `archive_override` replaced it with 0 lines of custom toolchain code.
+
+---
+
+## 4. Gotchas & Problems to Watch Out For
+
+1. **Clean Developer / CI Machines without `libgmp-dev`**:
+   - Always ensure any C library required by GHC core packages (`-lgmp`) or Hackage packages (`-lz`) is declared in `non_module_deps.bzl` and included in `stack.package`'s `extra_deps`.
+
+2. **BCR Release vs Upstream Master**:
+   - Until `rules_haskell` publishes a `1.1`+ release to Bazel Central Registry containing the `dist` tag class, projects on modern Linux must use `archive_override` or `git_override` to select `deb11`.
+
+3. **GHC Package Database & Haddock Structure**:
+   - GHC 9.4+ reorganizes library paths under `lib/x86_64-linux-ghc-*`. If creating custom toolchain rules, `pkgdb_to_bzl.py` requires `docdir_path` or valid symlinks to `package.conf.d` and `doc/html/libraries/base-*`.
+
+---
+
+## 5. Verification & Hermeticity Proof
+
+Hermeticity can be verified on any machine by running:
 
 ```bash
-cd hs/bzlmod
 python3 hermetic.py
 ```
 
-The script proves hermeticity through a two-phase verification process:
-
-1. **Action Graph Inspection (`bazelisk aquery`)**
-   - Queries the build graph (`bazelisk aquery --output=jsonproto "deps(//:example)"`) to inspect all actions, toolchains, executables, environment variables, and input artifacts.
-   - **Haskell Toolchains & Compilers**: Confirms that GHC, `ghc-pkg`, and related toolchain paths (`RULES_HASKELL_GHC_PATH`, `RULES_HASKELL_GHC_PKG_PATH`, `RULES_HASKELL_LIBDIR_PATH`, etc.) resolve exclusively to Bazel-managed external repositories (`external/rules_haskell...`) and not to host Haskell paths (`/usr/bin/ghc`, `~/.ghcup`, `~/.cabal`, `~/.stack`, `/nix/store`, or `/opt/ghc`).
-   - **Executables & Command Arguments**: Verifies that actions invoke Bazel-managed wrappers (`ghc_wrapper`, `cabal_wrapper`) or bindist binaries, and that action arguments contain no unmanaged host library or search flags.
-   - **Input Artifacts & Library Dependencies**: Resolves all input artifacts across Haskell and linking actions to verify that all Haskell packages (`base`, `bytestring`, `zlib`, `rts`), interface files (`.hi`), package configs (`.conf.d`), and C dependencies (`zlib.dev` / `libz.a`) are Bazel-managed artifacts, with zero inputs originating from host system library paths (`/usr/lib`, `/usr/local/lib`, `/lib64`, `~/.ghc`, etc.).
-
-2. **Sanitized Minimal-Environment Build & Execution (`bazelisk run`)**
-   - Strips all host Haskell and toolchain environment variables (`GHC*`, `CABAL*`, `STACK*`, `NIX*`, `HASKELL*`) to create a minimal environment (`PATH`, `HOME`, `USER`).
-   - Executes `bazelisk run //:example` to prove that the target compiles, links, and executes successfully without any host Haskell or system development prerequisites, outputting `Hello from rules_haskell!`.
+The verification script executes a two-phase check:
+1. **Phase 1 (`bazelisk aquery`)**: Inspects all 2,300+ actions in the build graph to confirm that no host tool paths (`/usr/bin/ghc`, `~/.ghcup`, `~/.cabal`) or host system libraries (`/usr/lib`, `/usr/local/lib`) are accessed.
+2. **Phase 2 (`bazelisk run`)**: Executes `bazelisk run //:example` under a sanitized minimal environment (`PATH`, `HOME`, `USER` only), confirming clean compilation and execution.
