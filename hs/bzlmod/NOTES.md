@@ -104,3 +104,46 @@ python3 hermetic.py
 The verification script executes a two-phase check:
 1. **Phase 1 (`bazelisk aquery`)**: Inspects all 2,300+ actions in the build graph to confirm that no host tool paths (`/usr/bin/ghc`, `~/.ghcup`, `~/.cabal`) or host system libraries (`/usr/lib`, `/usr/local/lib`) are accessed.
 2. **Phase 2 (`bazelisk run`)**: Executes `bazelisk run //:example` under a sanitized minimal environment (`PATH`, `HOME`, `USER` only), confirming clean compilation and execution.
+
+---
+
+## 6. Multi-Platform Support (Linux ARM64, macOS, Windows)
+
+### The Problem
+The current configuration hardcodes Linux x86_64 distributions:
+- `haskell_toolchains.bindists(dist = {"linux_amd64": "deb11"})` in `MODULE.bazel`.
+- Debian x86_64 `.deb` packages for `gmp` (`libgmp-dev_..._amd64.deb`) in `non_module_deps.bzl`.
+
+If the workspace is checked out on a macOS host (Intel or Apple Silicon M-series), a Linux ARM64 machine, or a Windows workstation, the build will fail because Bazel cannot use Linux x86_64 binaries/libraries on non-Linux-x86_64 hosts.
+
+### Solutions for Multi-Platform Expansion
+
+#### 1. Multi-Platform GHC Bindists in `MODULE.bazel`
+Expand `dist` mapping in `haskell_toolchains.bindists` to specify the OS/architecture matrix. Bazel's automatic toolchain resolution selects the matching toolchain for the current host operating system and architecture:
+
+```starlark
+haskell_toolchains.bindists(
+    version = "9.4.6",
+    dist = {
+        "linux_amd64": "deb11",
+        "linux_arm64": "deb11",      # or ubuntu20_04 / debian12
+        "darwin_amd64": "apple",     # macOS Intel
+        "darwin_arm64": "apple",     # macOS Apple Silicon (M1/M2/M3/M4)
+        "windows_amd64": "windows",  # MinGW / MSYS2 GHC bindist
+    },
+)
+```
+
+#### 2. Universal Hermetic C Dependencies (Source Builds vs Selectors)
+
+To make C dependencies (`gmp` and `zlib`) portable across all host OSes and architectures, use one of two patterns:
+
+- **Option A: Build C Libraries from Source (Recommended)**
+  Use `rules_foreign_cc` or portable `cc_library` rules to compile `gmp` (`gmp-6.3.0.tar.xz`) and `zlib` (`zlib-1.3.tar.gz`) from source tarballs. Bazel's host C toolchain compiles them into native static libraries (`.a` on Linux/macOS, `.lib` on Windows) for whatever platform Bazel is running on.
+
+- **Option B: OS & Arch Selectors in Bzlmod Repository Rules**
+  In `non_module_deps.bzl`, inspect `repository_ctx.os.name` (`"linux"`, `"mac os x"`, `"windows"`) and `repository_ctx.os.arch` (`"amd64"`, `"aarch64"`):
+  - Download `.deb` packages for Linux AMD64/ARM64.
+  - Download precompiled Homebrew/Apple tarballs or dylibs for macOS.
+  - Download precompiled DLL/lib zip archives for Windows.
+
