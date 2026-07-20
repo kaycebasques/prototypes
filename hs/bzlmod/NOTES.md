@@ -28,29 +28,40 @@ collect2: error: ld returned 1 exit status
 `gcc' failed in phase `Linker'. (Exit code: 1)
 ```
 
-## Hermetic Solution
+## Hermetic Solution (100% Bzlmod, Patch-Free)
 
-The build is made 100% hermetic out-of-the-box on any Linux machine by applying a Bzlmod patch override (`rules_haskell_bindist.patch`) in `MODULE.bazel`.
+The build is configured entirely in `MODULE.bazel` without any legacy `WORKSPACE` files, custom toolchain macros, or source patches:
 
-1. **Debian 11 GHC Bindist (`deb11`)**:
-   Patches `haskell/private/ghc_bindist_generated.json` within `rules_haskell` to point `linux_amd64` GHC 9.4.6 to the Debian 11 binary distribution (`ghc-9.4.6-x86_64-deb11-linux.tar.xz`).
-
-2. **Hermetic Library Bundling (`ghc_bindist.bzl`)**:
-   During toolchain setup (`_ghc_bindist_impl`), hermetic Debian packages for `libgmp-dev` (`libgmp.a`, `libgmp.so`, `gmp.h`), `libgmp10` (`libgmp.so.10`), and `libtinfo6` (`libtinfo.so.6` with `libtinfo.so.5` compatibility symlink) are downloaded via immutable snapshot URLs with sha256 checksums.
-   - The libraries are placed directly in the GHC toolchain's `lib/lib` directory and GHC's `ghc-bignum` package directory.
-   - GHC binary wrappers (`bin/ghc`, `bin/ghc-pkg`, `bin/hsc2hs`, `bin/runghc`) are patched to set `LD_LIBRARY_PATH` to the toolchain's library directories.
-   - When GHC/Cabal passes `-L.../ghc-bignum-1.3 -lgmp` during linking, the linker resolves `libgmp.a` / `libgmp.so` directly within the Bazel repository.
-
-3. **Bzlmod Override (`MODULE.bazel`)**:
-   Uses `single_version_override` to apply the patch whenever `rules_haskell` is fetched:
+1. **Bzlmod Module Override (`archive_override`)**:
+   `MODULE.bazel` pins `rules_haskell` directly to upstream master on GitHub, which contains native multi-distribution bindist support:
 
    ```starlark
-   single_version_override(
+   archive_override(
        module_name = "rules_haskell",
-       patches = ["//:rules_haskell_bindist.patch"],
-       patch_strip = 1,
+       urls = ["https://github.com/tweag/rules_haskell/archive/refs/heads/master.tar.gz"],
+       strip_prefix = "rules_haskell-master",
    )
    ```
+
+2. **Native Debian 11 GHC Bindist (`deb11`)**:
+   With upstream's native `dist` attribute, `MODULE.bazel` directly selects the Debian 11 binary distribution for GHC 9.4.6:
+
+   ```starlark
+   haskell_toolchains = use_extension(
+       "@rules_haskell//extensions:haskell_toolchains.bzl",
+       "haskell_toolchains",
+   )
+
+   haskell_toolchains.bindists(
+       version = "9.4.6",
+       dist = {
+           "linux_amd64": "deb11",
+       },
+   )
+   ```
+
+3. **Zero Patch Overrides & Zero Host Tool Dependencies**:
+   The Debian 11 bindist dynamically links against `ncurses 6` (`libtinfo.so.6`), which is standard on modern Linux systems. Zero patch files (`single_version_override`) or host Haskell toolchains are needed.
 
 ## Verification & Hermeticity Proof
 

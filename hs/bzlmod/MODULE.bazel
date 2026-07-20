@@ -3,10 +3,11 @@ module(name = "hs_bzlmod", version = "0.1")
 bazel_dep(name = "rules_haskell", version = "1.0")
 bazel_dep(name = "rules_cc", version = "0.0.9")
 
-single_version_override(
+# Pure Bzlmod override to upstream rules_haskell containing native Debian 11 bindist support
+archive_override(
     module_name = "rules_haskell",
-    patches = ["//:rules_haskell_bindist.patch"],
-    patch_strip = 1,
+    urls = ["https://github.com/tweag/rules_haskell/archive/refs/heads/master.tar.gz"],
+    strip_prefix = "rules_haskell-master",
 )
 
 haskell_toolchains = use_extension(
@@ -14,7 +15,13 @@ haskell_toolchains = use_extension(
     "haskell_toolchains",
 )
 
-haskell_toolchains.bindists(version = "9.4.6")
+# Natively select Debian 11 (zero patches needed)
+haskell_toolchains.bindists(
+    version = "9.4.6",
+    dist = {
+        "linux_amd64": "deb11",
+    },
+)
 
 non_module_deps = use_extension(
     "//:non_module_deps.bzl",
