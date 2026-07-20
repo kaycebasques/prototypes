@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  build:
+  run:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -14,4 +14,4 @@ jobs:
       - name: build
         run: |
           cd ${{github.workspace}}/hs/bzlmod
-          ${{github.workspace}}/bazelisk build //...
+          ${{github.workspace}}/bazelisk run :example
