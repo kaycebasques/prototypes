@@ -121,6 +121,11 @@ def inspect_action_graph(bzlmod_dir: Path, minimal_env: dict, target: str = "dep
         re.compile(r"^/opt/ghc/"),
     ]
 
+    forbidden_arg_patterns = [
+        re.compile(r"^-l(gmp|tinfo|ncurses)"),
+        re.compile(r"^-L/(usr|lib|lib64|opt)/"),
+    ]
+
     for act in actions:
         m = act.get("mnemonic", "")
         args = act.get("arguments", [])
@@ -134,6 +139,9 @@ def inspect_action_graph(bzlmod_dir: Path, minimal_env: dict, target: str = "dep
             for pattern in forbidden_host_tool_patterns:
                 if pattern.search(arg):
                     violations.append(f"Host Haskell path in argument '{arg}' in action {m}")
+            for pattern in forbidden_arg_patterns:
+                if pattern.search(arg):
+                    violations.append(f"Host library/linker flag '{arg}' in action {m}")
 
     # 3. Inspect input artifacts for system library leaks
     forbidden_system_lib_patterns = [
