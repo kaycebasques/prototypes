@@ -1,0 +1,24 @@
+name: build
+on:
+  push:
+    branches: ['main']
+  workflow_dispatch:
+permissions:
+  contents: read
+  # pages: write
+  # id-token: write
+jobs:
+  build:
+    # environment:
+      #name: github-pages
+      # url: ${{steps.deployment.outputs.page_url}}
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      # - name: configure
+        # uses: actions/configure-pages@v5
+      - name: build
+        run: |
+          cd ${{github.workspace}}/hs/bzlmod
+          ./bazelisk build //...
