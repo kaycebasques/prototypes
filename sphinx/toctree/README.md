@@ -3,5 +3,5 @@
 ## Build
 
 ```
-uv run sphinx-build -b html . _build/html
+uv run sphinx-build --fresh-env --write-all --builder html . _build/html
 ```

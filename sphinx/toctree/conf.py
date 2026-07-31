@@ -13,10 +13,11 @@ author = 'Author'
 version = '0.1.0'
 release = '0.1.0'
 
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+import os
+import sys
+sys.path.insert(0, os.path.abspath('_extensions'))
 
-extensions = []
+extensions = ['toctree']
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '.venv']
