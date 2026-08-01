@@ -1,0 +1,58 @@
+<style>
+.custom-nav-wrapper {
+  position: relative;
+  overflow: hidden;
+  height: 500px; /* fixed height for demonstration */
+  border: 1px solid #eee;
+  padding: 10px;
+  background: white;
+}
+.nav-pane {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: white;
+  padding: 10px;
+  /* Start panes off-screen to the right */
+  transform: translateX(100%);
+  transition: transform 0.3s ease-in-out;
+  z-index: 1;
+}
+/* The active targeted pane slides into view */
+.nav-pane:target {
+  transform: translateX(0);
+  z-index: 2;
+}
+/* Special rules for root so it is visible by default */
+#root {
+  transform: translateX(0);
+}
+/* When any pane is targeted, slide root to the left */
+.custom-nav-wrapper:has(.nav-pane:target) #root {
+  transform: translateX(-100%);
+}
+/* Unless root is specifically targeted */
+.custom-nav-wrapper:has(#root:target) #root {
+  transform: translateX(0);
+}
+</style>
+
+<h3>Custom Navigation</h3>
+<div class="custom-nav-wrapper">
+{% for pane in nav_panes %}
+<div id="{{ pane.id }}" class="nav-pane">
+  <ul>
+    {% if pane.parent %}
+    <li><a href="#{{ pane.parent.id }}">← Back to {{ pane.parent.title }}</a></li>
+    {% endif %}
+    <li><a href="{{ pane.href }}">{{ pane.title }}</a></li>
+    {% for child in pane.children_links %}
+    <li>
+      <a href="{% if child.has_children %}#{{ child.id }}{% else %}{{ child.href }}{% endif %}">
+        {{ child.title }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+</div>
