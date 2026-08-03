@@ -4,15 +4,19 @@ from typing import Any, Dict
 from sphinx.application import Sphinx
 from sphinx.environment.adapters.toctree import global_toctree_for_doc
 
-def extract_panes(toctree_node):
+def extract_panes(toctree_node, app, pagename):
     nav_panes = []
+    root_doc = app.config.root_doc
+    root_href = app.builder.get_relative_uri(pagename, root_doc)
+    root_is_current = (pagename == root_doc)
     
-    def process_list(bullet_list, current_id, current_title, current_href, parent_id, parent_title):
+    def process_list(bullet_list, current_id, current_title, current_href, current_is_current, parent_id, parent_title):
         pane = {
             "id": current_id,
             "parent": None if parent_id is None else {"id": parent_id, "title": parent_title},
             "title": current_title,
             "href": current_href,
+            "is_current": current_is_current,
             "children_links": []
         }
         
@@ -27,8 +31,13 @@ def extract_panes(toctree_node):
                 
             title = ref.astext()
             href = ref.attributes.get('refuri', '')
+            is_current = bool(ref.attributes.get('iscurrent', False)) or (href == '')
             node_id = title.replace(' ', '-').lower()
             
+            # Ignore self-references in toctree (e.g. `self`) since pane title handles current doc
+            if node_id == current_id:
+                continue
+
             nested_bullet_list = None
             for child in list_item.children[1:]:
                 if isinstance(child, nodes.bullet_list):
@@ -41,7 +50,8 @@ def extract_panes(toctree_node):
                 "id": node_id,
                 "title": title,
                 "href": href,
-                "has_children": has_children
+                "has_children": has_children,
+                "is_current": is_current
             })
             
             if has_children:
@@ -50,6 +60,7 @@ def extract_panes(toctree_node):
                     current_id=node_id,
                     current_title=title,
                     current_href=href,
+                    current_is_current=is_current,
                     parent_id=current_id,
                     parent_title=current_title
                 )
@@ -59,8 +70,24 @@ def extract_panes(toctree_node):
     if toctree_node and len(toctree_node) > 0:
         first_child = toctree_node[0]
         if isinstance(first_child, nodes.bullet_list):
-            process_list(first_child, "root", "root", ".", None, None)
-            
+            process_list(first_child, "root", "root", root_href, root_is_current, None, None)
+
+    # Identify which pane should be visible by default on initial page load (.active-pane).
+    # A pane is active if it directly represents the current document or contains a child link to it.
+    active_pane_found = False
+    for pane in nav_panes:
+        if pane.get("is_current") or any(c.get("is_current") for c in pane.get("children_links", [])):
+            pane["is_active_pane"] = True
+            active_pane_found = True
+            break
+
+    # Fallback to root pane if no specific subpane matched
+    if not active_pane_found and nav_panes:
+        for pane in nav_panes:
+            if pane["id"] == "root":
+                pane["is_active_pane"] = True
+                break
+
     return nav_panes
 
 import os
@@ -69,11 +96,11 @@ from jinja2 import Environment, FileSystemLoader
 def on_html_page_context(app, pagename, templatename, context, doctree):
     # Retrieve global toctree relative to the current page
     result = global_toctree_for_doc(app.env, pagename, app.builder)
-    panes = extract_panes(result)
+    panes = extract_panes(result, app, pagename)
     context['nav_panes'] = panes
     
     # Generate standalone nav.html once during the build of 'index'
-    if pagename == 'index':
+    if pagename == app.config.root_doc:
         env = Environment(loader=FileSystemLoader(os.path.join(app.srcdir, '_templates')))
         template = env.get_template('custom_nav.html')
         rendered = template.render(nav_panes=panes)

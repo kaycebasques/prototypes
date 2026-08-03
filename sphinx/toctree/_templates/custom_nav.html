@@ -7,52 +7,110 @@
   padding: 10px;
   background: white;
 }
+
+/*
+ * Zero-size fixed target anchors.
+ * Because these anchor elements are fixed at `top: 0` of the viewport,
+ * the browser's native target-scrolling algorithm calculates a scroll
+ * offset delta of 0px when a link targeting them (e.g. href="#nav-target-root")
+ * is clicked. This completely eliminates vertical page jumping during hash navigation.
+ */
+.nav-target {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .nav-pane {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
   background: white;
   padding: 10px;
-  /* Start panes off-screen to the right */
+  /* Start panes off-screen to the right by default */
   transform: translateX(100%);
   transition: transform 0.3s ease-in-out;
   z-index: 1;
 }
-/* The active targeted pane slides into view */
-.nav-pane:target {
+
+/*
+ * Initial load state:
+ * The pane associated with the current document receives the `.active-pane` class
+ * from the Python extension and is positioned on-screen (translateX(0)) by default
+ * when no URL hash target is active.
+ */
+.nav-pane.active-pane {
   transform: translateX(0);
   z-index: 2;
 }
-/* Special rules for root so it is visible by default */
-#root {
-  transform: translateX(0);
-}
-/* When any pane is targeted, slide root to the left */
-.custom-nav-wrapper:has(.nav-pane:target) #root {
+
+/*
+ * Hash navigation override:
+ * When ANY pane target anchor is active via URL hash (e.g. #nav-target-root),
+ * hide the initial default `.active-pane` so the newly targeted pane can take focus.
+ */
+.custom-nav-wrapper:has(.nav-target:target) .nav-pane.active-pane {
   transform: translateX(-100%);
 }
-/* Unless root is specifically targeted */
-.custom-nav-wrapper:has(#root:target) #root {
+
+/*
+ * Slide in targeted pane:
+ * Dynamically match each targeted anchor (#nav-target-<id>:target) to its corresponding
+ * sibling pane (#<id>) and slide it into view.
+ */
+{% for pane in nav_panes %}
+#nav-target-{{ pane.id }}:target ~ #{{ pane.id }} {
   transform: translateX(0);
+  z-index: 3;
+}
+{% endfor %}
+
+/* Highlight current page title within pane */
+.nav-pane .current {
+  font-weight: bold;
 }
 </style>
 
 <h3>Custom Navigation</h3>
 <div class="custom-nav-wrapper">
-{% for pane in nav_panes %}
-<div id="{{ pane.id }}" class="nav-pane">
-  <ul>
-    {% if pane.parent %}
-    <li><a href="#{{ pane.parent.id }}">← Back to {{ pane.parent.title }}</a></li>
-    {% endif %}
-    <li><a href="{{ pane.href }}">{{ pane.title }}</a></li>
-    {% for child in pane.children_links %}
-    <li>
-      <a href="{% if child.has_children %}#{{ child.id }}{% else %}{{ child.href }}{% endif %}">
-        {{ child.title }}
-      </a>
-    </li>
-    {% endfor %}
-  </ul>
-</div>
-{% endfor %}
+  <!-- Invisible fixed target anchors to receive hash links without vertical scrolling -->
+  {% for pane in nav_panes %}
+  <a id="nav-target-{{ pane.id }}" class="nav-target"></a>
+  {% endfor %}
+
+  {% for pane in nav_panes %}
+  <div id="{{ pane.id }}" class="nav-pane{% if pane.is_active_pane %} active-pane{% endif %}">
+    <ul>
+      {% if pane.parent %}
+      <!-- Hash link targets the fixed nav-target anchor instead of the pane div directly -->
+      <li><a href="#nav-target-{{ pane.parent.id }}">← Back to {{ pane.parent.title }}</a></li>
+      {% endif %}
+      <li>
+        {% if pane.is_current %}
+        <!-- Current document rendered as non-clickable text -->
+        <span class="current">{{ pane.title }}</span>
+        {% else %}
+        <a href="{{ pane.href }}">{{ pane.title }}</a>
+        {% endif %}
+      </li>
+      {% for child in pane.children_links %}
+      <li>
+        {% if child.has_children %}
+        <!-- Child pane link targets the fixed nav-target anchor -->
+        <a href="#nav-target-{{ child.id }}">{{ child.title }}</a>
+        {% else %}
+        {% if child.is_current %}
+        <span class="current">{{ child.title }}</span>
+        {% else %}
+        <a href="{{ child.href }}">{{ child.title }}</a>
+        {% endif %}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
 </div>
