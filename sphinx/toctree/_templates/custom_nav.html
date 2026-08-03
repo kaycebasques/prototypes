@@ -10,10 +10,7 @@
 
 /*
  * Zero-size fixed target anchors.
- * Because these anchor elements are fixed at `top: 0` of the viewport,
- * the browser's native target-scrolling algorithm calculates a scroll
- * offset delta of 0px when a link targeting them (e.g. href="#nav-target-root")
- * is clicked. This completely eliminates vertical page jumping during hash navigation.
+ * Fixed at `top: 0` so native target-scrolling produces 0px vertical scroll jump.
  */
 .nav-target {
   position: fixed;
@@ -30,42 +27,43 @@
   top: 0; left: 0; right: 0; bottom: 0;
   background: white;
   padding: 10px;
-  /* Start panes off-screen to the right by default */
+  /* By default, panes start off-screen to the right */
   transform: translateX(100%);
   transition: transform 0.3s ease-in-out;
   z-index: 1;
 }
 
-/*
- * Initial load state:
- * The pane associated with the current document receives the `.active-pane` class
- * from the Python extension and is positioned on-screen (translateX(0)) by default
- * when no URL hash target is active.
- */
+/* Initial load: Active pane for the current page is on-screen */
 .nav-pane.active-pane {
   transform: translateX(0);
   z-index: 2;
 }
 
-/*
- * Hash navigation override:
- * When ANY pane target anchor is active via URL hash (e.g. #nav-target-root),
- * hide the initial default `.active-pane` so the newly targeted pane can take focus.
- */
-.custom-nav-wrapper:has(.nav-target:target) .nav-pane.active-pane {
+/* Initial load: Ancestors of the active pane start off-screen to the left */
+.nav-pane.active-ancestor {
   transform: translateX(-100%);
+  z-index: 1;
 }
 
 /*
- * Slide in targeted pane:
- * Dynamically match each targeted anchor (#nav-target-<id>:target) to its corresponding
- * sibling pane (#<id>) and slide it into view.
+ * Hash target rules:
+ * For every pane P:
+ * 1. When #nav-target-P is targeted, #P moves to translateX(0) (slides in).
+ * 2. All ancestors of P move to translateX(-100%) (off-screen left).
+ * 3. All non-ancestors/descendants revert to translateX(100%) (off-screen right).
+ * This guarantees that forward navigation pushes parent panes left, and backward navigation
+ * slides parent panes back in from the left while child panes slide out to the right.
  */
 {% for pane in nav_panes %}
 #nav-target-{{ pane.id }}:target ~ #{{ pane.id }} {
   transform: translateX(0);
   z-index: 3;
 }
+{% for anc_id in pane.ancestors %}
+#nav-target-{{ pane.id }}:target ~ #{{ anc_id }} {
+  transform: translateX(-100%);
+}
+{% endfor %}
 {% endfor %}
 
 /* Highlight current page title within pane */
@@ -82,7 +80,7 @@
   {% endfor %}
 
   {% for pane in nav_panes %}
-  <div id="{{ pane.id }}" class="nav-pane{% if pane.is_active_pane %} active-pane{% endif %}">
+  <div id="{{ pane.id }}" class="nav-pane{% if pane.is_active_pane %} active-pane{% endif %}{% if pane.is_ancestor_of_active %} active-ancestor{% endif %}">
     <ul>
       {% if pane.parent %}
       <!-- Hash link targets the fixed nav-target anchor instead of the pane div directly -->

@@ -75,10 +75,12 @@ def extract_panes(toctree_node, app, pagename):
     # Identify which pane should be visible by default on initial page load (.active-pane).
     # A pane is active if it directly represents the current document or contains a child link to it.
     active_pane_found = False
+    active_pane_id = None
     for pane in nav_panes:
         if pane.get("is_current") or any(c.get("is_current") for c in pane.get("children_links", [])):
             pane["is_active_pane"] = True
             active_pane_found = True
+            active_pane_id = pane["id"]
             break
 
     # Fallback to root pane if no specific subpane matched
@@ -86,7 +88,28 @@ def extract_panes(toctree_node, app, pagename):
         for pane in nav_panes:
             if pane["id"] == "root":
                 pane["is_active_pane"] = True
+                active_pane_id = "root"
                 break
+
+    # Build parent map and compute ancestor lists for proper slide transition directions
+    parent_map = {p["id"]: (p["parent"]["id"] if p["parent"] else None) for p in nav_panes}
+    for pane in nav_panes:
+        ancestors = []
+        curr = parent_map.get(pane["id"])
+        while curr:
+            ancestors.append(curr)
+            curr = parent_map.get(curr)
+        pane["ancestors"] = ancestors
+
+    # Flag ancestors of the active pane for initial page load positioning (positioned off-screen to the left)
+    active_ancestors = set()
+    curr = parent_map.get(active_pane_id)
+    while curr:
+        active_ancestors.add(curr)
+        curr = parent_map.get(curr)
+
+    for pane in nav_panes:
+        pane["is_ancestor_of_active"] = pane["id"] in active_ancestors
 
     return nav_panes
 
