@@ -37,13 +37,13 @@ as represented by the toctree data in `a/index.rst`. and so on.
 ## build
 
 ```
-uv run sphinx-build --fresh-env --write-all --fail-on-warning --builder html . _build/html
+./build.sh
 ```
 
 ## serve
 
 ```
-python3 -m http.server -d _build/html 8000
+./serve.sh
 ```
 
 ## data
